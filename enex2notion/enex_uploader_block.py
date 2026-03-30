@@ -35,7 +35,7 @@ def _upload_file(new_block, resource: EvernoteResource):
         "record": {
             "table": "block",
             "id": new_block.id,
-            "spaceId": new_block.space_info["spaceId"],
+            "spaceId": new_block._client.current_space.id,  # noqa: WPS437
         },
     }
 
