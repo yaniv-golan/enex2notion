@@ -47,7 +47,7 @@ class EvernoteNote(object):
 
             s1_hash = hashlib.sha1()
             for h in hashable:
-                s1_hash.update(h.encode("utf-8"))
+                s1_hash.update(str(h).encode("utf-8"))
             self._note_hash = s1_hash.hexdigest()  # noqa: WPS601
 
         return self._note_hash
