@@ -60,15 +60,19 @@ def _upload_file(new_block, resource: EvernoteResource):
 
 
 def _extract_file_id(url):
-    # aws_host/space_id/file_id/filename
+    # New format: attachment:file_id:filename
+    attachment_re = r"^attachment:([a-f0-9\-]+):(.+)$"
+    attachment_match = re.search(attachment_re, url)
+    if attachment_match:
+        return attachment_match.group(1)
+
+    # Old format: aws_host/space_id/file_id/filename
     aws_re = r"^https://(.*?\.amazonaws\.com)/([a-f0-9\-]+)/([a-f0-9\-]+)/(.*?)$"
-
     aws_match = re.search(aws_re, url)
+    if aws_match:
+        return aws_match.group(3)
 
-    if not aws_match:
-        raise ValueError(f"Uploaded file URL format changed: {url}")
-
-    return aws_match.group(3)
+    raise ValueError(f"Uploaded file URL format changed: {url}")
 
 
 def _sizeof_fmt(num):

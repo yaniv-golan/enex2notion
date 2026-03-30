@@ -189,6 +189,12 @@ def test_upload_url_parser():
     assert _extract_file_id(good_url) == "5ef8c8e1-e388-4cd7-a2f3-535606b74136"
 
 
+def test_upload_url_parser_attachment():
+    attachment_url = "attachment:834f1ea4-b283-4c7f-acdb-bbff55026863:image.png"
+
+    assert _extract_file_id(attachment_url) == "834f1ea4-b283-4c7f-acdb-bbff55026863"
+
+
 def test_upload_url_parser_fail():
     bad_url = "https://google.com"
 
