@@ -137,6 +137,36 @@ The `--mode` option allows you to choose how to upload your notebooks: as databa
 
 Since `PAGE` mode does not benefit from having separate space for metadata, you can still preserve the note's original meta with the `--add-meta` option. It will attach a callout block with all meta info as a first block in each note [like this](https://imgur.com/a/lJTbprH).
 
+#### DB mode: pre-creating the database
+
+Due to Notion API changes, `DB` mode requires you to **pre-create the database** in Notion before running the import. Create a database under your root page with a title matching your ENEX filename (e.g., "My Notebook" for `My Notebook.enex`) and the following columns:
+
+| Column | Type | Description |
+|---|---|---|
+| Title | Title | Note title (default column) |
+| Evernote Tags | Multi-select | Tags from Evernote |
+| Evernote Web Clip URL | URL | Source URL (web clips only) |
+| Evernote Created | Date | Original creation date in Evernote |
+| Evernote Updated | Date | Original last edit date in Evernote |
+| Evernote Author | Text | Note author from Evernote |
+| Evernote Imported | Created time | When the note was imported (auto) |
+| Last Modified | Last edited time | Last Notion edit (auto) |
+
+Optionally, add these **formula columns** to unify Evernote and Notion timestamps:
+
+- **Real Created**: `if(empty(prop("Evernote Created")), prop("Evernote Imported"), prop("Evernote Created"))`
+- **Real Updated**: `if(empty(prop("Evernote Updated")), prop("Last Modified"), if(dateBetween(prop("Last Modified"), prop("Evernote Imported"), "seconds") > 120, prop("Last Modified"), prop("Evernote Updated")))`
+
+These formulas use the Evernote date when available, falling back to Notion timestamps for notes created directly in Notion. "Real Updated" switches to the Notion timestamp when a note is edited more than 2 minutes after import.
+
+A setup script is provided to create the database automatically using the official Notion API:
+
+```bash
+$ python scripts/create_notion_db.py --token <NOTION_API_TOKEN> --parent-page-id <PAGE_ID> --title "My Notebook"
+```
+
+See [scripts/create\_notion\_db.py](scripts/create_notion_db.py) for details. This requires a [Notion integration token](https://www.notion.so/my-integrations) (not `token_v2`).
+
 ### Web Clips
 
 Due to Notion's limitations Evernote web clips cannot be uploaded as-is. `enex2notion` provides two modes with the `--mode-webclips` option:

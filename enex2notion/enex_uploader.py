@@ -45,7 +45,9 @@ def _upload_note(root, note: EvernoteNote, note_blocks, keep_failed):
     # Set proper name after everything is uploaded
     new_page.title_plaintext = note.title
 
-    _update_edit_time(new_page, note.updated)
+    # Only override edit time for PAGE mode; DB mode uses explicit date columns
+    if not isinstance(new_page, CollectionRowBlock):
+        _update_edit_time(new_page, note.updated)
 
 
 def _update_edit_time(page, date):
@@ -66,9 +68,11 @@ def _make_page(note, root):
     return (
         root.collection.add_row(
             title=tmp_name,
-            url=note.url,
-            tags=note.tags,
-            created=note.created,
+            evernote_web_clip_url=note.url,
+            evernote_tags=note.tags,
+            evernote_created=note.created,
+            evernote_updated=note.updated,
+            evernote_author=note.author,
         )
         if isinstance(root, CollectionViewPageBlock)
         else root.children.add_new(PageBlock, title_plaintext=tmp_name)

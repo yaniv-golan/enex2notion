@@ -44,8 +44,14 @@ def _get_notebook_database(root, title):
 
     schema = _make_notebook_db_schema()
 
-    # Show only Tags and Updated
-    properties_order = _properties_order(schema, "Tags", "Updated")
+    # Show key Evernote metadata columns
+    properties_order = _properties_order(
+        schema,
+        "Evernote Tags",
+        "Evernote Created",
+        "Evernote Updated",
+        "Evernote Author",
+    )
 
     cvb = root.children.add_new(CollectionViewPageBlock)
     cvb.collection = cvb._client.get_collection(  # noqa: WPS437
@@ -66,12 +72,15 @@ def _get_notebook_database(root, title):
 
 
 def _make_notebook_db_schema():
-    col_ids = rand_id_list(4, 4)
+    col_ids = rand_id_list(7, 4)
     return {
-        col_ids[0]: {"name": "Tags", "type": "multi_select", "options": []},
-        col_ids[1]: {"name": "URL", "type": "url"},
-        col_ids[2]: {"name": "Created", "type": "created_time"},
-        col_ids[3]: {"name": "Updated", "type": "last_edited_time"},
+        col_ids[0]: {"name": "Evernote Tags", "type": "multi_select", "options": []},
+        col_ids[1]: {"name": "Evernote Web Clip URL", "type": "url"},
+        col_ids[2]: {"name": "Evernote Created", "type": "date"},
+        col_ids[3]: {"name": "Evernote Updated", "type": "date"},
+        col_ids[4]: {"name": "Evernote Author", "type": "text"},
+        col_ids[5]: {"name": "Evernote Imported", "type": "created_time"},
+        col_ids[6]: {"name": "Last Modified", "type": "last_edited_time"},
         "title": {"name": "Title", "type": "title"},
     }
 
@@ -89,13 +98,17 @@ def _get_existing_notebook_database(root, title):
 
     # Make sure options has at least empty list, otherwise it will crash
     tag_col_id = next(
-        c_k
-        for c_k, c_v in child.collection.get("schema").items()
-        if c_v["name"] == "Tags"
+        (
+            c_k
+            for c_k, c_v in child.collection.get("schema").items()
+            if c_v["name"] in ("Tags", "Evernote Tags")
+        ),
+        None,
     )
 
-    if child.collection.get(f"schema.{tag_col_id}.options") is None:
-        child.collection.set(f"schema.{tag_col_id}.options", [])
+    if tag_col_id is not None:
+        if child.collection.get(f"schema.{tag_col_id}.options") is None:
+            child.collection.set(f"schema.{tag_col_id}.options", [])
 
     return child
 
