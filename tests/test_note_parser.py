@@ -1116,3 +1116,31 @@ def test_text_prop_strip_props():
         ["\ntest2\n"],
         ["\n2", [["b"]]],
     ]
+
+
+def test_resolve_resources_missing_replaced_with_placeholder(caplog):
+    from enex2notion.note_parser.note_post_process_resources import resolve_resources
+    from enex2notion.notion_blocks.uploadable import NotionImageBlock
+
+    note = EvernoteNote(
+        title="test",
+        created=datetime(2021, 1, 1, tzinfo=tzutc()),
+        updated=datetime(2021, 1, 1, tzinfo=tzutc()),
+        content="",
+        tags=[],
+        author="",
+        url="",
+        is_webclip=False,
+        resources=[],
+    )
+
+    blocks = [NotionImageBlock(md5_hash="abc123")]
+
+    with caplog.at_level(logging.WARNING, logger="enex2notion"):
+        resolve_resources(blocks, note)
+
+    assert len(blocks) == 1
+    assert "abc123" in blocks[0].attrs["title_plaintext"]
+    assert "Missing resource" in blocks[0].attrs["title_plaintext"]
+    assert "Missing resource in 'test'" in caplog.text
+    assert "abc123" in caplog.text
