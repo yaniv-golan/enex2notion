@@ -17,7 +17,12 @@ def mock_api(mocker):
             "enex2notion.cli_upload.get_notebook_database"
         ),
         "get_notebook_page": mocker.patch("enex2notion.cli_upload.get_notebook_page"),
-        "upload_note": mocker.patch("enex2notion.cli_upload.upload_note"),
+        "create_note_page": mocker.patch("enex2notion.cli_upload.create_note_page"),
+        "upload_note_blocks": mocker.patch("enex2notion.cli_upload.upload_note_blocks"),
+        "remove_note_page": mocker.patch("enex2notion.cli_upload.remove_note_page"),
+        "clear_page_children": mocker.patch(
+            "enex2notion.cli_upload.clear_page_children"
+        ),
         "parse_note": mocker.patch("enex2notion.cli_upload.parse_note"),
     }
 
@@ -52,7 +57,7 @@ def test_empty_dir(mock_api, fake_note_factory, fs):
 
     cli(["test_dir"])
 
-    mock_api["upload_note"].assert_not_called()
+    mock_api["upload_note_blocks"].assert_not_called()
 
 
 def test_verbose(mock_api, fake_note_factory, mocker):
@@ -92,19 +97,20 @@ def test_page_mode(mock_api, fake_note_factory, mocker):
 
 
 def test_upload_fail_retry(mock_api, fake_note_factory, mocker, caplog):
-    mock_api["upload_note"].side_effect = [NoteUploadFailException] * 4 + [None]
+    mock_api["upload_note_blocks"].side_effect = [Exception] * 4 + [None]
 
     with caplog.at_level(logging.WARNING, logger="enex2notion"):
         cli(["--token", "fake_token", "fake.enex"])
 
-    assert mock_api["upload_note"].call_count == 5
+    assert mock_api["upload_note_blocks"].call_count == 5
+    assert mock_api["create_note_page"].call_count == 1
     assert "Failed to upload note" in caplog.text
 
 
 def test_upload_fail_retry_custom(mock_api, fake_note_factory, mocker, caplog):
     retries = 10
 
-    mock_api["upload_note"].side_effect = [NoteUploadFailException] * (retries * 2)
+    mock_api["upload_note_blocks"].side_effect = [Exception] * (retries * 2)
 
     with caplog.at_level(logging.ERROR, logger="enex2notion"):
         with pytest.raises(NoteUploadFailException):
@@ -118,37 +124,37 @@ def test_upload_fail_retry_custom(mock_api, fake_note_factory, mocker, caplog):
                 ]
             )
 
-    assert mock_api["upload_note"].call_count == retries
+    assert mock_api["upload_note_blocks"].call_count == retries
     assert "Failed to upload note" in caplog.text
 
 
 def test_upload_fail_retry_infinite(mock_api, fake_note_factory, mocker, caplog):
     retries = 0
-    exceptions = [NoteUploadFailException] * 10
+    exceptions = [Exception] * 10
 
-    mock_api["upload_note"].side_effect = exceptions + [None]
+    mock_api["upload_note_blocks"].side_effect = exceptions + [None]
 
     with caplog.at_level(logging.WARNING, logger="enex2notion"):
         cli(["--token", "fake_token", "--retry", str(retries), "fake.enex"])
 
-    assert mock_api["upload_note"].call_count == len(exceptions) + 1
+    assert mock_api["upload_note_blocks"].call_count == len(exceptions) + 1
     assert "Failed to upload note" in caplog.text
 
 
 def test_upload_fail(mock_api, fake_note_factory, mocker, caplog):
-    mock_api["upload_note"].side_effect = [NoteUploadFailException] * 5
+    mock_api["upload_note_blocks"].side_effect = [Exception] * 5
 
     with pytest.raises(NoteUploadFailException):
         cli(["--token", "fake_token", "fake.enex"])
 
 
 def test_upload_skip(mock_api, fake_note_factory, mocker, caplog):
-    mock_api["upload_note"].side_effect = [NoteUploadFailException] * 5
+    mock_api["upload_note_blocks"].side_effect = [Exception] * 5
 
     with caplog.at_level(logging.ERROR, logger="enex2notion"):
         cli(["--token", "fake_token", "--skip-failed", "fake.enex"])
 
-    assert mock_api["upload_note"].call_count == 5
+    assert mock_api["upload_note_blocks"].call_count == 5
     assert "Failed to upload note" in caplog.text
 
 
@@ -170,19 +176,21 @@ def test_upload_notebook_skip(mock_api, fake_note_factory, mocker, caplog):
 
 
 def test_no_keep_failed(mock_api, fake_note_factory, mocker):
-    cli(["--token", "fake_token", "fake.enex"])
+    mock_api["upload_note_blocks"].side_effect = [Exception] * 5
 
-    mock_api["upload_note"].assert_called_once_with(
-        mocker.ANY, mocker.ANY, mocker.ANY, False
-    )
+    with pytest.raises(NoteUploadFailException):
+        cli(["--token", "fake_token", "fake.enex"])
+
+    mock_api["remove_note_page"].assert_called_once_with(mocker.ANY, False)
 
 
 def test_keep_failed(mock_api, fake_note_factory, mocker):
-    cli(["--token", "fake_token", "--keep-failed", "fake.enex"])
+    mock_api["upload_note_blocks"].side_effect = [Exception] * 5
 
-    mock_api["upload_note"].assert_called_once_with(
-        mocker.ANY, mocker.ANY, mocker.ANY, True
-    )
+    with pytest.raises(NoteUploadFailException):
+        cli(["--token", "fake_token", "--keep-failed", "fake.enex"])
+
+    mock_api["remove_note_page"].assert_called_once_with(mocker.ANY, True)
 
 
 def test_add_meta(mock_api, fake_note_factory, mocker, parse_rules):
@@ -201,7 +209,7 @@ def test_skip_dupe(mock_api, fake_note_factory, mocker):
         mocker.MagicMock(note_hash="fake_hash"),
     ]
 
-    mock_api["upload_note"].assert_called_once()
+    mock_api["upload_note_blocks"].assert_called_once()
 
 
 def test_done_file(mock_api, fake_note_factory, mocker, fs):
@@ -217,7 +225,7 @@ def test_done_file(mock_api, fake_note_factory, mocker, fs):
     with open("done.txt") as f:
         done_result = f.read()
 
-    assert mock_api["upload_note"].call_count == 2
+    assert mock_api["upload_note_blocks"].call_count == 2
     assert done_result == "fake_hash1\nfake_hash2\n"
 
 
@@ -231,7 +239,7 @@ def test_done_file_populated(mock_api, fake_note_factory, mocker, fs):
 
     cli(["--token", "fake_token", "--done-file", "done.txt", "fake.enex"])
 
-    mock_api["upload_note"].assert_not_called()
+    mock_api["upload_note_blocks"].assert_not_called()
 
 
 def test_done_file_empty(mock_api, fake_note_factory, fs):
@@ -239,7 +247,7 @@ def test_done_file_empty(mock_api, fake_note_factory, fs):
 
     cli(["--token", "fake_token", "--done-file", "done.txt", "fake.enex"])
 
-    mock_api["upload_note"].assert_not_called()
+    mock_api["upload_note_blocks"].assert_not_called()
 
 
 def test_bad_file(mock_api, fake_note_factory):
