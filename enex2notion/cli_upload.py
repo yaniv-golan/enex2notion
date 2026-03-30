@@ -5,7 +5,12 @@ from typing import Optional
 
 from enex2notion.enex_parser import count_notes, iter_notes
 from enex2notion.enex_types import EvernoteNote
-from enex2notion.enex_uploader import upload_note
+from enex2notion.enex_uploader import (
+    clear_page_children,
+    create_note_page,
+    remove_note_page,
+    upload_note_blocks,
+)
 from enex2notion.enex_uploader_modes import get_notebook_database, get_notebook_page
 from enex2notion.note_parser.note import parse_note
 from enex2notion.utils_exceptions import NoteUploadFailException
@@ -115,14 +120,38 @@ class EnexUploader(object):
         )
 
     def _upload_note(self, notebook_root, note, note_blocks):
-        self._attempt_upload(
-            upload_note,
-            f"Failed to upload note '{note.title}' to Notion",
-            notebook_root,
-            note,
-            note_blocks,
-            self.rules.keep_failed,
-        )
+        page_holder = [None]
+
+        def _attempt(root, note, note_blocks, keep_failed):
+            try:
+                if page_holder[0] is None:
+                    page_holder[0] = create_note_page(root, note)
+                else:
+                    clear_page_children(page_holder[0], note)
+                upload_note_blocks(page_holder[0], note, note_blocks)
+            except Exception as e:
+                raise NoteUploadFailException from e
+
+        try:
+            self._attempt_upload(
+                _attempt,
+                f"Failed to upload note '{note.title}' to Notion",
+                notebook_root,
+                note,
+                note_blocks,
+                self.rules.keep_failed,
+            )
+        except NoteUploadFailException:
+            if page_holder[0] is not None:
+                try:
+                    page_holder[0].title_plaintext = f"{note.title} [UNFINISHED UPLOAD]"
+                except Exception:
+                    logger.debug(f"Failed to reset title for '{note.title}'")
+                try:
+                    remove_note_page(page_holder[0], self.rules.keep_failed)
+                except Exception:
+                    logger.warning(f"Failed to clean up page for '{note.title}'")
+            raise
 
     def _attempt_upload(self, upload_func, error_message, *args, **kwargs):
         for attempt in itertools.count(1):
